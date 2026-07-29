@@ -29,7 +29,7 @@ Built in milestones; this is where things stand.
 | 4 | Voxelizer: tapered-cylinder sweep into a sparse grid | **done** |
 | 5 | MagicaVoxel `.vox` writer | **done** |
 | 6 | Live viewer: voxel rendering + ImGui parameter sliders | **done** |
-| 7 | Catch2 coverage for expansion and voxelization | ongoing (150 tests) |
+| 7 | Catch2 coverage for expansion and voxelization | ongoing (155 tests) |
 
 Since the milestones, following *The Algorithmic Beauty of Plants*: tropism
 (ch. 2), `random()` in expressions (ch. 7), context-sensitive productions with
@@ -42,7 +42,8 @@ every parameter. Drag one and the plant regenerates; press **Write .vox** to
 export what you are looking at.
 
 ```bash
-plant-gen [preset] [iterations] [seed] [resolution] [-o out.vox] [--sheet N] [--presets DIR]
+plant-gen [preset] [iterations] [seed] [resolution] [-o out.vox] [--sheet N]
+          [--presets DIR] [--load record.vox.json] [--capture DIR [--capture-frames N]]
 ```
 
 The arguments only set the starting state, which the sliders take over from
@@ -386,6 +387,26 @@ Constants are written as the shortest decimal that reads back as exactly the
 same float. Stored straight, a float widens to double and `0.16f` dumps as
 `0.1599999964237213` — correct, and unreadable in a file meant to be edited by
 hand.
+
+### Provenance
+
+Every `.vox` export writes a `.vox.json` beside it recording the parameters that
+produced it — and the **grammar itself**, embedded rather than referenced by
+name, because a preset file can be edited afterwards and a record pointing at
+"leafy" would then describe a plant that no longer exists.
+
+```bash
+plant-gen bush 11 42 96 -o prov.vox      # writes prov.vox and prov.vox.json
+plant-gen --load prov.vox.json -o again.vox
+```
+
+Those two `.vox` files are byte-identical, SHA-256 verified. A specimen in your
+output folder is a specimen you can get back.
+
+The record is deliberately its own schema rather than a mirror of the viewer's
+parameter struct — the file should outlive a UI refactor — and every field in
+`parameters` is optional on read, so a hand-trimmed or older file degrades to
+defaults instead of failing.
 
 ### Capture
 

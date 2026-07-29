@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <type_traits>
 
 namespace plant::lsystem {
 namespace {
@@ -133,6 +134,103 @@ void saveGrammar(const std::filesystem::path& path, const GrammarSource& source)
         throw GrammarIOError("could not open " + path.string() + " for writing");
     }
     const std::string text = toJson(source);
+    file.write(text.data(), static_cast<std::streamsize>(text.size()));
+    if (!file) {
+        throw GrammarIOError("failed while writing " + path.string());
+    }
+}
+
+std::string toJson(const Provenance& record) {
+    Json object;
+    object["tool"] = "plant-gen";
+
+    Json parameters;
+    parameters["iterations"] = record.iterations;
+    parameters["seed"] = record.seed;
+    parameters["angleScale"] = shortestRoundTrip(record.angleScale);
+    parameters["thicknessScale"] = shortestRoundTrip(record.thicknessScale);
+    parameters["tropism"] = shortestRoundTrip(record.tropism);
+    parameters["resolution"] = record.resolution;
+    parameters["sheetSize"] = record.sheetSize;
+    object["parameters"] = std::move(parameters);
+
+    Json result;
+    result["specimens"] = record.specimens;
+    result["segments"] = record.segments;
+    result["voxels"] = record.voxels;
+    result["boxDimension"] = record.dimension;
+    object["result"] = std::move(result);
+
+    // Parsed back out of the same representation the grammar files use.
+    object["grammar"] = Json::parse(toJson(record.grammar));
+    return object.dump(2) + "\n";
+}
+
+Provenance provenanceFromJson(std::string_view text) {
+    Json object;
+    try {
+        object = Json::parse(text);
+    } catch (const Json::exception& error) {
+        throw GrammarIOError(std::string("not valid JSON: ") + error.what());
+    }
+    if (!object.is_object()) {
+        throw GrammarIOError("a provenance file must contain a JSON object");
+    }
+
+    const auto grammar = object.find("grammar");
+    if (grammar == object.end()) {
+        throw GrammarIOError("missing required field 'grammar'");
+    }
+
+    Provenance record;
+    record.grammar = fromJson(grammar->dump());
+
+    // Parameters are all optional: an older or hand-trimmed file still restores
+    // whatever it does carry, and the rest keeps its default.
+    if (const auto parameters = object.find("parameters"); parameters != object.end()) {
+        const auto read = [&parameters](const char* key, auto& destination) {
+            if (const auto found = parameters->find(key); found != parameters->end()) {
+                if (!found->is_number()) {
+                    throw GrammarIOError(std::string("parameter '") + key + "' must be a number");
+                }
+                destination = found->get<std::remove_reference_t<decltype(destination)>>();
+            }
+        };
+        read("iterations", record.iterations);
+        read("seed", record.seed);
+        read("angleScale", record.angleScale);
+        read("thicknessScale", record.thicknessScale);
+        read("tropism", record.tropism);
+        read("resolution", record.resolution);
+        read("sheetSize", record.sheetSize);
+    }
+    return record;
+}
+
+Provenance loadProvenance(const std::filesystem::path& path) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        throw GrammarIOError("could not open " + path.string());
+    }
+    std::ostringstream contents;
+    contents << file.rdbuf();
+    try {
+        return provenanceFromJson(contents.str());
+    } catch (const GrammarIOError& error) {
+        throw GrammarIOError(path.filename().string() + ": " + error.what());
+    }
+}
+
+void saveProvenance(const std::filesystem::path& path, const Provenance& record) {
+    if (path.has_parent_path() && !path.parent_path().empty()) {
+        std::error_code ignored;
+        std::filesystem::create_directories(path.parent_path(), ignored);
+    }
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    if (!file) {
+        throw GrammarIOError("could not open " + path.string() + " for writing");
+    }
+    const std::string text = toJson(record);
     file.write(text.data(), static_cast<std::streamsize>(text.size()));
     if (!file) {
         throw GrammarIOError("failed while writing " + path.string());

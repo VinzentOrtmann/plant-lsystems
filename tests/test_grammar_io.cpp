@@ -223,6 +223,95 @@ TEST_CASE("the revision changes when a file is added, removed or rewritten",
     CHECK(lsystem::scanGrammarDirectory(scratch.path()).revision != initial);
 }
 
+// ---------------------------------------------------------------------------
+// Provenance
+// ---------------------------------------------------------------------------
+
+TEST_CASE("a provenance record round-trips every parameter", "[grammar-io][provenance]") {
+    lsystem::Provenance original;
+    original.grammar = lsystem::presets::leafyShoot();
+    original.iterations = 11;
+    original.seed = 4242;
+    original.angleScale = 1.25f;
+    original.thicknessScale = 0.8f;
+    original.tropism = -0.125f;
+    original.resolution = 192;
+    original.sheetSize = 3;
+    original.specimens = 9;
+    original.segments = 1234;
+    original.voxels = 56789;
+    original.dimension = 1.875;
+
+    const lsystem::Provenance restored =
+        lsystem::provenanceFromJson(lsystem::toJson(original));
+
+    CHECK(restored.iterations == 11);
+    CHECK(restored.seed == 4242);
+    CHECK(restored.angleScale == 1.25f);
+    CHECK(restored.thicknessScale == 0.8f);
+    CHECK(restored.tropism == -0.125f);
+    CHECK(restored.resolution == 192);
+    CHECK(restored.sheetSize == 3);
+    // The grammar travels with the record, not a reference to it by name.
+    CHECK(restored.grammar.name == original.grammar.name);
+    CHECK(restored.grammar.rules == original.grammar.rules);
+    CHECK(restored.grammar.constants == original.grammar.constants);
+}
+
+TEST_CASE("a restored record regrows the identical plant", "[grammar-io][provenance]") {
+    // The whole point: an exported model on disk can be reproduced exactly.
+    lsystem::Provenance original;
+    original.grammar = lsystem::presets::bush();
+    original.iterations = 9;
+    original.seed = 77;
+
+    const lsystem::Provenance restored =
+        lsystem::provenanceFromJson(lsystem::toJson(original));
+
+    const std::string before = toString(lsystem::LSystem::compile(original.grammar)
+                                            .expand(original.iterations, original.seed));
+    const std::string after = toString(lsystem::LSystem::compile(restored.grammar)
+                                           .expand(restored.iterations, restored.seed));
+    CHECK(before == after);
+}
+
+TEST_CASE("a record with no parameters block still restores its grammar",
+          "[grammar-io][provenance]") {
+    // Hand-trimmed or older files should degrade to defaults rather than fail.
+    const lsystem::Provenance record = lsystem::provenanceFromJson(
+        R"json({"grammar":{"name":"x","axiom":"A","rules":["A -> F(1)"]}})json");
+
+    CHECK(record.grammar.name == "x");
+    CHECK(record.iterations == 0);
+    CHECK(record.angleScale == 1.0f);
+}
+
+TEST_CASE("a malformed provenance record is rejected", "[grammar-io][provenance][errors]") {
+    CHECK_THROWS_AS(lsystem::provenanceFromJson("{}"), lsystem::GrammarIOError);
+    CHECK_THROWS_AS(lsystem::provenanceFromJson("[]"), lsystem::GrammarIOError);
+    CHECK_THROWS_AS(lsystem::provenanceFromJson(R"({"grammar":{"name":"x"}})"),
+                    lsystem::GrammarIOError);
+    CHECK_THROWS_AS(
+        lsystem::provenanceFromJson(
+            R"({"grammar":{"name":"x","axiom":"A","rules":[]},"parameters":{"seed":"soon"}})"),
+        lsystem::GrammarIOError);
+}
+
+TEST_CASE("a provenance record survives a trip through a file", "[grammar-io][provenance][io]") {
+    const ScratchDirectory scratch("provenance");
+    lsystem::Provenance record;
+    record.grammar = lsystem::presets::fern();
+    record.iterations = 14;
+    record.seed = 5;
+
+    lsystem::saveProvenance(scratch.file("plant.vox.json"), record);
+    const lsystem::Provenance restored = lsystem::loadProvenance(scratch.file("plant.vox.json"));
+
+    CHECK(restored.grammar.name == "fern");
+    CHECK(restored.iterations == 14);
+    CHECK(restored.seed == 5);
+}
+
 TEST_CASE("the asset directory is found from anywhere below it", "[grammar-io][io]") {
     const ScratchDirectory scratch("assets");
     std::filesystem::create_directories(scratch.path() / "assets" / "presets");

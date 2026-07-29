@@ -40,6 +40,8 @@ struct Options {
     /// Non-empty means "render frames into this folder on startup, then exit".
     std::string captureDirectory;
     int captureFrames = 1;
+    /// Non-empty means "restore everything from this .vox.json sidecar".
+    std::string loadPath;
 };
 
 void printUsage() {
@@ -77,6 +79,12 @@ bool parseOptions(int argc, char** argv, Options& options) {
         };
         if (argument == "-o" || argument == "--out") {
             if (!takeValue(options.outputPath)) {
+                return false;
+            }
+            continue;
+        }
+        if (argument == "--load") {
+            if (!takeValue(options.loadPath)) {
                 return false;
             }
             continue;
@@ -197,6 +205,20 @@ public:
     }
 
     [[nodiscard]] const std::vector<std::string>& presetNames() const { return names_; }
+    [[nodiscard]] const lsystem::GrammarSource& source(int index) const {
+        return sources_[static_cast<std::size_t>(index)];
+    }
+    /// Adds a grammar carried in from a provenance file, so a restored export
+    /// works even when the preset it came from has since been edited away.
+    int adopt(lsystem::GrammarSource grammar) {
+        const std::string name = grammar.name;
+        sources_.push_back(std::move(grammar));
+        names_.push_back(name);
+        compiledIndex_ = -1;
+        cachedIndex_ = -1;
+        generations_.clear();
+        return static_cast<int>(sources_.size()) - 1;
+    }
     /// One entry per specimen: a single plant, or every cell of the seed sheet.
     [[nodiscard]] const std::vector<turtle::Skeleton>& skeletons() const { return skeletons_; }
     /// World-space position each specimen is laid out at.
@@ -457,6 +479,27 @@ struct CaptureJob {
     [[nodiscard]] bool isTurntable() const { return request.frames > 1; }
 };
 
+/// Writes `<model>.vox.json` beside the model. Without it an exported plant is
+/// orphaned: nothing on disk records which grammar and seed produced it.
+void writeSidecar(const std::filesystem::path& voxPath, const lsystem::GrammarSource& grammar,
+                  const viewer::PlantParams& params, const viewer::SceneStats& stats) {
+    lsystem::Provenance record;
+    record.grammar = grammar;
+    record.iterations = params.iterations;
+    record.seed = static_cast<std::uint32_t>(params.seed);
+    record.angleScale = params.angleScale;
+    record.thicknessScale = params.thicknessScale;
+    record.tropism = params.tropism;
+    record.resolution = params.resolution;
+    record.sheetSize = params.sheetSize;
+    record.specimens = stats.specimens;
+    record.segments = stats.segments;
+    record.voxels = stats.voxels;
+    record.dimension = stats.dimension;
+
+    lsystem::saveProvenance(voxPath.string() + ".json", record);
+}
+
 /// Uses the same palette the exporter writes, so what you see is what
 /// MagicaVoxel will show.
 std::vector<viewer::VoxelInstance> gridToInstances(const voxelize::VoxelGrid& grid,
@@ -545,6 +588,22 @@ int main(int argc, char** argv) {
         params.resolution = options.resolution;
         params.sheetSize = options.sheetSize;
 
+        if (!options.loadPath.empty()) {
+            // The grammar travels inside the record, so this reproduces the
+            // original even if the preset it came from has changed since.
+            const lsystem::Provenance record = lsystem::loadProvenance(options.loadPath);
+            params.presetIndex = plant.adopt(record.grammar);
+            params.iterations = record.iterations;
+            params.seed = static_cast<int>(record.seed);
+            params.angleScale = record.angleScale;
+            params.thicknessScale = record.thicknessScale;
+            params.tropism = record.tropism;
+            params.resolution = record.resolution;
+            params.sheetSize = record.sheetSize;
+            std::printf("[load] restored '%s' from %s\n", record.grammar.name.c_str(),
+                        options.loadPath.c_str());
+        }
+
         if (!plant.rebuild(params, Stage::Expand)) {
             std::fprintf(stderr, "fatal: %s\n", plant.error().c_str());
             return 1;
@@ -560,7 +619,9 @@ int main(int argc, char** argv) {
 
         if (!options.outputPath.empty()) {
             vox::writeVox(options.outputPath, plant.grid(), palette);
-            std::printf("[export] wrote %s\n", options.outputPath.c_str());
+            writeSidecar(options.outputPath, plant.source(params.presetIndex), params,
+                         plant.stats());
+            std::printf("[export] wrote %s (+ .json)\n", options.outputPath.c_str());
         }
 
         viewer::WindowConfig windowConfig;
@@ -770,8 +831,9 @@ int main(int argc, char** argv) {
             if (const auto path = ui.takeExportRequest()) {
                 try {
                     vox::writeVox(*path, plant.grid(), palette);
-                    ui.setStatus("wrote " + *path + " (" + std::to_string(plant.stats().voxels) +
-                                 " voxels)");
+                    writeSidecar(*path, plant.source(params.presetIndex), params, plant.stats());
+                    ui.setStatus("wrote " + *path + " + .json (" +
+                                 std::to_string(plant.stats().voxels) + " voxels)");
                 } catch (const std::exception& e) {
                     ui.setStatus(e.what(), /*isError=*/true);
                 }

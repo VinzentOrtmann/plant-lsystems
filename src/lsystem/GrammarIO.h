@@ -58,6 +58,37 @@ struct GrammarDirectory {
 /// the result is simply empty, and the caller falls back to the built-ins.
 [[nodiscard]] GrammarDirectory scanGrammarDirectory(const std::filesystem::path& directory);
 
+/// Everything needed to reproduce one exported model, written beside it.
+///
+/// The grammar is embedded rather than referenced by name: a preset file can be
+/// edited after the fact, and a record that pointed at "leafy" would then
+/// describe a plant that no longer exists.
+///
+/// Deliberately its own schema rather than a mirror of the viewer's parameter
+/// struct. The file should outlive a UI refactor.
+struct Provenance {
+    GrammarSource grammar;
+
+    int iterations = 0;
+    std::uint32_t seed = 0;
+    float angleScale = 1.0f;
+    float thicknessScale = 1.0f;
+    float tropism = 0.0f;
+    int resolution = 0;
+    int sheetSize = 1;
+
+    /// What came out, for reference. Not needed to regenerate.
+    int specimens = 1;
+    std::size_t segments = 0;
+    std::size_t voxels = 0;
+    double dimension = 0.0;
+};
+
+[[nodiscard]] std::string toJson(const Provenance& record);
+[[nodiscard]] Provenance provenanceFromJson(std::string_view text);
+[[nodiscard]] Provenance loadProvenance(const std::filesystem::path& path);
+void saveProvenance(const std::filesystem::path& path, const Provenance& record);
+
 /// Walks up from `startingPoint` looking for `assets/presets`, so the viewer
 /// finds its grammars whether it was launched from the project root or from
 /// deep inside a build tree. Returns an empty path if there is none.
