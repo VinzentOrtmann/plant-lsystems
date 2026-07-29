@@ -1,8 +1,16 @@
 build/
 out/
 cmake-build-*/
+dist/
 .cache/
 .vs/
 .vscode/
 CMakeUserPresets.json
+
+# Generated output: models, captures and packages.
 *.vox
+*.vox.json
+*.zip
+captures/
+_CPack_Packages/
+

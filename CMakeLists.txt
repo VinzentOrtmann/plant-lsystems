@@ -43,4 +43,21 @@ if(PLANT_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
+# ----------------------------------------------------------------- packaging
+# `cmake --install build/msvc --config RelWithDebInfo --prefix dist` produces a
+# runnable folder; `cpack` zips it. The grammars ship alongside the executable
+# rather than inside it, so an installed copy is still editable.
+install(TARGETS plant-gen RUNTIME DESTINATION .)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets/" DESTINATION assets)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/README.md" DESTINATION .)
+
+set(CPACK_PACKAGE_NAME "plant-lsystems")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
+set(CPACK_PACKAGE_FILE_NAME "plant-lsystems-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}")
+# A directory, not an installer: this is a thing you unzip and run.
+set(CPACK_GENERATOR "ZIP")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "plant-lsystems")
+include(CPack)
+
 message(STATUS "plant-lsystems ${PROJECT_VERSION} | tests: ${PLANT_BUILD_TESTS}")

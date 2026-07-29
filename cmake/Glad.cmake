@@ -5,10 +5,9 @@
 # tree and install jinja2 into it.
 
 FetchContent_Declare(glad
-    GIT_REPOSITORY https://github.com/Dav1dde/glad.git
-    GIT_TAG        v2.0.8
-    GIT_SHALLOW    TRUE
-    SOURCE_SUBDIR  cmake)
+    URL           https://github.com/Dav1dde/glad/archive/refs/tags/v2.0.8.tar.gz
+    URL_HASH      SHA256=44f06f9195427c7017f5028d0894f57eb216b0a8f7c4eda7ce883732aeb2d0fc
+    SOURCE_SUBDIR cmake)
 FetchContent_MakeAvailable(glad)
 
 function(_plant_provision_glad_python out_var)

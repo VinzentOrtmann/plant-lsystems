@@ -1,0 +1,7 @@
+# Normalise line endings in the repository; check out whatever is native.
+# Without this, a clone on Linux and a clone on Windows disagree about every
+# line of every file.
+* text=auto
+
+*.png binary
+*.vox binary

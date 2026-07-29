@@ -1,5 +1,7 @@
 # plant-lsystems
 
+[![build and test](https://github.com/VinzentOrtmann/plant-lsystems/actions/workflows/ci.yml/badge.svg)](https://github.com/VinzentOrtmann/plant-lsystems/actions/workflows/ci.yml)
+
 A procedural plant generator in C++20. It grows a plant from a parametric,
 stochastic L-system, walks the resulting string with a 3D turtle to build a
 branch skeleton, rasterizes that skeleton into a sparse voxel grid via tapered
@@ -552,6 +554,24 @@ Presets live in [CMakePresets.json](CMakePresets.json):
 - `ninja` — single-config Ninja. On Windows, run it from a Developer Command
   Prompt so `cl.exe` is on `PATH`.
 
+To produce something you can hand to someone else:
+
+```bash
+cmake --install build/msvc --config RelWithDebInfo --prefix dist
+cpack --config build/msvc/CPackConfig.cmake -C RelWithDebInfo
+```
+
+That gives a `dist/` folder — executable, README and `assets/presets` — and a
+zip of it. The grammars ship *alongside* the executable rather than baked in, so
+an installed copy is still editable and still hot-reloads.
+
+CI builds and tests on Windows/MSVC and Linux/GCC. The Linux job is the only
+thing that actually verifies the portability this project otherwise just claims;
+it can run the whole suite headless because the test binary links only the
+computational stages, never the viewer. It skips the golden hashes, which pin
+float-derived voxel indices generated on MSVC — whether GCC agrees bit for bit
+is an open question rather than something to assume.
+
 The Visual Studio generator is multi-config, so binaries land in
 `build/msvc/bin/Debug/` and `build/msvc/bin/RelWithDebInfo/`. Those directories
 are deliberately *not* flattened into one: the two configurations would
@@ -560,7 +580,13 @@ build landed there last.
 
 ## Dependencies
 
-All pinned and fetched with `FetchContent`; nothing is vendored in-tree.
+All fetched with `FetchContent` as release archives pinned by SHA-256; nothing
+is vendored in-tree. Archives rather than clones deliberately: a hash pins a
+source tree at least as firmly as a tag, the download is a fraction of the size,
+and it sidesteps a failure that repeatedly wedged the build on Windows —
+FetchContent decides to re-populate a dependency, something still holds the git
+working tree, and the removal fails until you delete the directory by hand. An
+extracted archive has no working tree to hold.
 
 | Library | Version | Used for |
 |---------|---------|----------|
