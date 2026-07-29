@@ -1,0 +1,8 @@
+build/
+out/
+cmake-build-*/
+.cache/
+.vs/
+.vscode/
+CMakeUserPresets.json
+*.vox

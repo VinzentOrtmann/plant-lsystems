@@ -1,0 +1,20 @@
+{
+  "name": "signal",
+  "description": "Context-sensitive: a signal climbs the stem, leaving laterals to age.",
+  "axiom": "S F(internode, stemWidth) A(internode, stemWidth)",
+  "constants": {
+    "divergence": 137.5,
+    "forkAngle": 40.0,
+    "internode": 0.35,
+    "lateralAngle": 50.0,
+    "stemWidth": 0.045
+  },
+  "rules": [
+    "A(l,w) : l > 0.12 -> F(l,w) A(l*0.96, w*0.96)",
+    "A(l,w) : l <= 0.12 -> F(l,w)",
+    "S < F(l,w) -> F(l,w) [ +(lateralAngle) L(l*0.8, w*0.6) ] /(divergence) S",
+    "S -> ",
+    "L(l,w) : l > 0.05 -> F(l,w) [ +(forkAngle) L(l*0.5, w*0.5) ] L(l*0.88, w*0.9)",
+    "L(l,w) : l <= 0.05 -> F(l,w)"
+  ]
+}

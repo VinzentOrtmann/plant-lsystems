@@ -1,0 +1,16 @@
+{
+  "name": "fern",
+  "description": "Frond with paired pinnae, self-similar down two levels.",
+  "axiom": "A(1, 0.05)",
+  "constants": {
+    "leafletAngle": 45.0,
+    "pinnaAngle": 60.0,
+    "twist": 18.0
+  },
+  "rules": [
+    "A(l,w) : l > 0.1 -> F(l,w) [ +(pinnaAngle) &(12) B(l*0.55, w*0.4) ] [ -(pinnaAngle) &(12) B(l*0.55, w*0.4) ] /(twist) A(l*0.88, w*0.9)",
+    "A(l,w) : l <= 0.1 -> F(l,w)",
+    "B(l,w) : l > 0.04 -> F(l,w) [ +(leafletAngle) B(l*0.5, w*0.5) ] [ -(leafletAngle) B(l*0.5, w*0.5) ] B(l*0.7, w*0.8)",
+    "B(l,w) : l <= 0.04 -> F(l,w)"
+  ]
+}

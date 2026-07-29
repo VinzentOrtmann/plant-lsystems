@@ -1,0 +1,22 @@
+{
+  "name": "simple-tree",
+  "description": "Monopodial tree with a central leader and golden-angle laterals.",
+  "axiom": "A(1, 0.08)",
+  "constants": {
+    "branchAngle": 45.0,
+    "divergence": 137.5,
+    "extend": 0.9,
+    "fork": 0.6,
+    "minLength": 0.04,
+    "taper": 0.707,
+    "trunkAngle": 40.0
+  },
+  "rules": [
+    "A(l,w) : l > minLength -> F(l,w) [ &(trunkAngle) B(l*fork, w*taper) ] /(divergence) A(l*extend, w*taper)",
+    "B(l,w) : l > minLength -> F(l,w) [ -(branchAngle) $ C(l*fork, w*taper) ] C(l*extend, w*taper)",
+    "C(l,w) : l > minLength -> F(l,w) [ +(branchAngle) $ B(l*fork, w*taper) ] B(l*extend, w*taper)",
+    "A(l,w) : l <= minLength -> F(l,w)",
+    "B(l,w) : l <= minLength -> F(l,w)",
+    "C(l,w) : l <= minLength -> F(l,w)"
+  ]
+}

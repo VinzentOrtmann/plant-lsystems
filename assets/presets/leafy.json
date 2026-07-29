@@ -1,0 +1,16 @@
+{
+  "name": "leafy",
+  "description": "Branching shoot whose twigs end in filled polygon leaves.",
+  "axiom": "A(1, 0.05)",
+  "constants": {
+    "branchAngle": 32.0,
+    "divergence": 137.5,
+    "leafSize": 0.16,
+    "minLength": 0.16
+  },
+  "rules": [
+    "A(l,w) : l > minLength -> F(l,w) [ +(branchAngle*random(0.8,1.2)) A(l*0.62, w*0.7) ] /(divergence) [ -(branchAngle*random(0.8,1.2)) A(l*0.62, w*0.7) ] /(divergence) A(l*0.78, w*0.85)",
+    "A(l,w) : l <= minLength -> F(l,w) [ L(leafSize) ]",
+    "L(s) -> { . +(45) f(s) . -(90) f(s) . -(90) f(s) . }"
+  ]
+}
