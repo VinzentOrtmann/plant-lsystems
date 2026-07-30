@@ -6,36 +6,67 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Every step tees its output to a log and, on failure, appends the tail to the
+# job summary. Raw run logs need an authenticated download; a summary does not,
+# so a failure stays diagnosable from the outside.
 jobs:
   windows:
     name: Windows / MSVC
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      # FetchContent clones six dependencies on a cold cache; keeping _deps
-      # between runs turns a five minute configure into seconds. Keyed on the
-      # files that pin the versions, so a bump invalidates it.
+      # FetchContent downloads six archives on a cold cache; keeping _deps
+      # between runs turns a slow configure into a fast one. Keyed on the files
+      # that pin the versions, so a bump invalidates it.
       - name: Cache dependencies
         uses: actions/cache@v4
         with:
           path: build/msvc/_deps
           key: deps-windows-${{ hashFiles('cmake/Dependencies.cmake', 'cmake/Glad.cmake') }}
 
+      - name: Tool versions
+        run: |
+          cmake --version
+          python --version || true
+          python3 --version || true
+
       - name: Configure
-        run: cmake --preset msvc
+        run: |
+          set -o pipefail
+          cmake --preset msvc 2>&1 | tee configure.log
 
       - name: Build
-        run: cmake --build --preset msvc-release
+        run: |
+          set -o pipefail
+          cmake --build --preset msvc-release 2>&1 | tee build.log
 
       - name: Test
-        run: ctest --preset msvc-release
+        run: |
+          set -o pipefail
+          ctest --preset msvc-release 2>&1 | tee test.log
+
+      - name: Report failure
+        if: failure()
+        run: |
+          for f in configure.log build.log test.log; do
+            [ -f "$f" ] || continue
+            {
+              echo "## Windows: tail of $f"
+              echo '```'
+              tail -n 150 "$f"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
 
   linux:
     name: Linux / GCC
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # GLFW needs the X11 development headers to configure, even though
       # nothing here opens a window.
@@ -52,11 +83,21 @@ jobs:
           path: build/ninja/_deps
           key: deps-linux-${{ hashFiles('cmake/Dependencies.cmake', 'cmake/Glad.cmake') }}
 
+      - name: Tool versions
+        run: |
+          cmake --version
+          gcc --version | head -1
+          python3 --version
+
       - name: Configure
-        run: cmake --preset ninja
+        run: |
+          set -o pipefail
+          cmake --preset ninja 2>&1 | tee configure.log
 
       - name: Build
-        run: cmake --build --preset ninja
+        run: |
+          set -o pipefail
+          cmake --build --preset ninja 2>&1 | tee build.log
 
       # The test binary links only the computational stages -- no window, no GL
       # context -- so the whole suite runs on a headless runner.
@@ -66,4 +107,19 @@ jobs:
       # open question rather than something to assume, so they are excluded
       # here instead of being allowed to fail.
       - name: Test
-        run: ctest --preset ninja -E "presets produce byte-identical output"
+        run: |
+          set -o pipefail
+          ctest --preset ninja -E "presets produce byte-identical output" 2>&1 | tee test.log
+
+      - name: Report failure
+        if: failure()
+        run: |
+          for f in configure.log build.log test.log; do
+            [ -f "$f" ] || continue
+            {
+              echo "## Linux: tail of $f"
+              echo '```'
+              tail -n 150 "$f"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
