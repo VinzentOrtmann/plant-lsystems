@@ -118,6 +118,22 @@ jobs:
           set -o pipefail
           ctest --preset ninja -E "presets produce byte-identical output" 2>&1 | tee test.log
 
+      # Run them anyway, but do not gate the build on the answer. The point is
+      # to find out whether GCC and MSVC agree bit for bit on float-derived
+      # voxel indices, which is worth knowing and not worth assuming.
+      - name: Golden hashes (informational)
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ctest --preset ninja -R "presets produce byte-identical output" 2>&1 | tee golden.log
+
+      - name: Report golden result
+        if: always()
+        run: |
+          [ -f golden.log ] || exit 0
+          esc=$(tail -n 30 golden.log | sed -e 's/%/%25/g' -e 's/\r//g' | sed -z 's/\n/%0A/g')
+          echo "::notice title=linux-golden-hashes::${esc}"
+
       - name: Report failure
         if: failure()
         run: |
