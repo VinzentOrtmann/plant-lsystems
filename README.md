@@ -580,10 +580,14 @@ an installed copy is still editable and still hot-reloads.
 
 CI builds and tests on Windows/MSVC and Linux/GCC. The Linux job is the only
 thing that actually verifies the portability this project otherwise just claims;
-it can run the whole suite headless because the test binary links only the
-computational stages, never the viewer. It skips the golden hashes, which pin
-float-derived voxel indices generated on MSVC — whether GCC agrees bit for bit
-is an open question rather than something to assume.
+it runs the whole suite headless, because the test binary links only the
+computational stages and never the viewer.
+
+That includes the golden hashes, which was not a given — they pin *float-derived*
+voxel indices and were generated under MSVC. GCC produces the same values, so
+the lock turns out to be a cross-toolchain guarantee rather than a Windows-only
+one. Two genuine portability facts came out of setting this up: GLFW's Wayland
+requirement above, and this.
 
 The Visual Studio generator is multi-config, so binaries land in
 `build/msvc/bin/Debug/` and `build/msvc/bin/RelWithDebInfo/`. Those directories
@@ -657,6 +661,7 @@ covers voxel *indices* rather than float positions — which voxels are filled i
 the observable output, and hashing floats would break on any harmless change of
 rounding.
 
-The values are identical between Debug and RelWithDebInfo, which is what makes
-the lock usable rather than flaky. When one legitimately changes, the failure
-message carries its own replacement line to paste in.
+The values are identical between Debug and RelWithDebInfo, and — verified in CI —
+between MSVC and GCC, which is what makes the lock usable rather than flaky.
+When one legitimately changes, the failure message carries its own replacement
+line to paste in.

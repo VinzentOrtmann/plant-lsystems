@@ -109,30 +109,14 @@ jobs:
       # The test binary links only the computational stages -- no window, no GL
       # context -- so the whole suite runs on a headless runner.
       #
-      # Except the golden hashes: those pin float-derived voxel indices, and
-      # they were generated with MSVC. Whether GCC agrees bit for bit is an
-      # open question rather than something to assume, so they are excluded
-      # here instead of being allowed to fail.
+      # Including the golden hashes. Those pin float-derived voxel indices and
+      # were generated under MSVC; whether GCC would agree bit for bit was an
+      # open question until this job answered it. It does, so the lock is a
+      # cross-toolchain guarantee rather than a Windows-only one.
       - name: Test
         run: |
           set -o pipefail
-          ctest --preset ninja -E "presets produce byte-identical output" 2>&1 | tee test.log
-
-      # Run them anyway, but do not gate the build on the answer. The point is
-      # to find out whether GCC and MSVC agree bit for bit on float-derived
-      # voxel indices, which is worth knowing and not worth assuming.
-      - name: Golden hashes (informational)
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          ctest --preset ninja -R "presets produce byte-identical output" 2>&1 | tee golden.log
-
-      - name: Report golden result
-        if: always()
-        run: |
-          [ -f golden.log ] || exit 0
-          esc=$(tail -n 30 golden.log | sed -e 's/%/%25/g' -e 's/\r//g' | sed -z 's/\n/%0A/g')
-          echo "::notice title=linux-golden-hashes::${esc}"
+          ctest --preset ninja 2>&1 | tee test.log
 
       - name: Report failure
         if: failure()
