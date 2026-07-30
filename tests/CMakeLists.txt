@@ -10,11 +10,9 @@ add_executable(plant_tests
     test_voxwriter.cpp
     test_grammar_io.cpp
     test_golden.cpp
-    test_metrics.cpp
-    test_colonize.cpp)
+    test_metrics.cpp)
 
 target_link_libraries(plant_tests
-    PRIVATE plant::options glm::glm plant::lsystem plant::turtle plant::voxelize plant::export plant::grammar_io plant::colonize
-            Catch2::Catch2WithMain)
+    PRIVATE plant::options glm::glm plant::lsystem plant::turtle plant::voxelize plant::export plant::grammar_io Catch2::Catch2WithMain)
 
 catch_discover_tests(plant_tests)

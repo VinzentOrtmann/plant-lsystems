@@ -117,8 +117,4 @@ struct TurtleError : std::runtime_error {
 /// so a segment's parent always has a lower index than the segment itself.
 Skeleton buildSkeleton(const lsystem::Word& word, const TurtleConfig& config = {});
 
-/// Recomputes `boundsMin`/`boundsMax` from the segments and polygons present.
-/// Exposed because the turtle is not the only thing that builds a Skeleton.
-void recomputeBounds(Skeleton& skeleton);
-
 }  // namespace plant::turtle

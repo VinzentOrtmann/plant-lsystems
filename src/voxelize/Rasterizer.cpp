@@ -109,27 +109,13 @@ float voxelSizeForResolution(const turtle::Skeleton& skeleton, int longestAxisVo
 
 namespace {
 
-/// Bark at the thick end of the range, foliage green at the thin end.
-///
-/// Keyed on thickness rather than branch depth, because depth means different
-/// things to different generators: the turtle's is bracket nesting, while space
-/// colonization increments it at every non-first child, so it saturates almost
-/// immediately and paints even a limb off the trunk as a twig. Thickness is the
-/// same physical quantity either way.
-///
-/// Logarithmic, because radii span more than an order of magnitude: mapped
-/// linearly, everything but the trunk collapses into the thinnest slot.
-ColorIndex colorForRadius(float radius, float thinnest, float thickest,
-                          const RasterizerConfig& config) {
+ColorIndex colorForDepth(int depth, int maxDepth, const RasterizerConfig& config) {
     const int count = std::max(1, config.colorCount);
-    if (!(thickest > thinnest) || !(radius > 0.0f)) {
+    if (maxDepth <= 0) {
         return config.firstColor;
     }
-    const float span = std::log(thickest / thinnest);
-    const float fraction =
-        span > 1e-6f ? std::clamp(std::log(thickest / radius) / span, 0.0f, 1.0f) : 0.0f;
-    const int step =
-        std::clamp(static_cast<int>(fraction * static_cast<float>(count)), 0, count - 1);
+    const float fraction = static_cast<float>(depth) / static_cast<float>(maxDepth);
+    const int step = std::clamp(static_cast<int>(fraction * static_cast<float>(count)), 0, count - 1);
     return static_cast<ColorIndex>(config.firstColor + step);
 }
 
@@ -143,6 +129,7 @@ VoxelGrid voxelize(const turtle::Skeleton& skeleton, const RasterizerConfig& con
         return VoxelGrid({0, 0, 0}, glm::vec3(0.0f), config.voxelSize);
     }
 
+    const int maxDepth = skeleton.maxDepth();
     const float minRadius = config.minRadiusVoxels * config.voxelSize;
     const float halfThickness = 0.5f * config.polygonThicknessVoxels * config.voxelSize;
 
@@ -153,14 +140,9 @@ VoxelGrid voxelize(const turtle::Skeleton& skeleton, const RasterizerConfig& con
     // same reason.
     glm::vec3 solidMin(std::numeric_limits<float>::max());
     glm::vec3 solidMax(std::numeric_limits<float>::lowest());
-    // Range the colour ramp is stretched across.
-    float thinnest = std::numeric_limits<float>::max();
-    float thickest = 0.0f;
     for (const turtle::Segment& segment : skeleton.segments) {
         const float radiusA = std::max(segment.startRadius, minRadius);
         const float radiusB = std::max(segment.endRadius, minRadius);
-        thinnest = std::min(thinnest, segment.startRadius);
-        thickest = std::max(thickest, segment.startRadius);
         solidMin = glm::min(solidMin, glm::min(segment.start - radiusA, segment.end - radiusB));
         solidMax = glm::max(solidMax, glm::max(segment.start + radiusA, segment.end + radiusB));
     }
@@ -192,7 +174,7 @@ VoxelGrid voxelize(const turtle::Skeleton& skeleton, const RasterizerConfig& con
     for (const turtle::Segment& segment : skeleton.segments) {
         const float radiusA = std::max(segment.startRadius, minRadius);
         const float radiusB = std::max(segment.endRadius, minRadius);
-        const ColorIndex color = colorForRadius(segment.startRadius, thinnest, thickest, config);
+        const ColorIndex color = colorForDepth(segment.depth, maxDepth, config);
 
         // Index-space bounding box of the swept solid.
         const glm::vec3 lo = glm::min(segment.start - radiusA, segment.end - radiusB);

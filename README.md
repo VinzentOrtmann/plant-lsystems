@@ -31,14 +31,13 @@ Built in milestones; this is where things stand.
 | 4 | Voxelizer: tapered-cylinder sweep into a sparse grid | **done** |
 | 5 | MagicaVoxel `.vox` writer | **done** |
 | 6 | Live viewer: voxel rendering + ImGui parameter sliders | **done** |
-| 7 | Catch2 coverage for expansion and voxelization | ongoing (173 tests) |
+| 7 | Catch2 coverage for expansion and voxelization | ongoing (155 tests) |
 
 Since the milestones, following *The Algorithmic Beauty of Plants*: tropism
 (ch. 2), `random()` in expressions (ch. 7), context-sensitive productions with
 tree-aware matching (ch. 1, applied in ch. 3), and polygon surfaces for leaves
 (ch. 5) and box-counting dimension (ch. 8). Plus animated growth off a
-generation cache, JSON grammars with live reload, seed sheets, and a second
-generator (space colonization) for comparison.
+generation cache, JSON grammars with live reload, and seed sheets.
 
 `plant-gen` runs the whole pipeline and drops you in a viewer with sliders for
 every parameter. Drag one and the plant regenerates; press **Write .vox** to
@@ -46,8 +45,7 @@ export what you are looking at.
 
 ```bash
 plant-gen [preset] [iterations] [seed] [resolution] [-o out.vox] [--sheet N]
-          [--colonize] [--presets DIR] [--load record.vox.json]
-          [--capture DIR [--capture-frames N]]
+          [--presets DIR] [--load record.vox.json] [--capture DIR [--capture-frames N]]
 ```
 
 The arguments only set the starting state, which the sliders take over from
@@ -148,67 +146,6 @@ A runaway grammar hits a module budget and throws instead of exhausting memory.
 | `bush` | Stochastic shrub, three competing habits plus jittered geometry | 12 iterations, ~640 segments |
 | `signal` | Context-sensitive: a signal climbs the stem dropping laterals | 40 iterations, 1.6k segments |
 | `leafy` | Branching shoot whose twigs end in filled polygon leaves | 10 iterations, 511 segments + 6.6k leaf voxels |
-
-## The other generator: space colonization
-
-`--colonize`, or the radio button. A second, unrelated way to grow a tree, after
-Runions et al., *Modeling Trees with a Space Colonization Algorithm* (2007) — and
-the reason it is worth having both rather than adding a sixth grammar.
-
-An L-system is **generative**: rules say what a bud becomes, and the shape is
-whatever falls out. Space colonization is **responsive**: a cloud of attraction
-points describes the volume the crown should occupy, branches grow towards
-whichever points are near them, and points are consumed on arrival. Squash the
-crown and you get a spreading tree; stretch it and you get a columnar one, with
-no rule changing. The two produce visibly different *kinds* of tree — the
-L-system's monopodial leader and golden-angle laterals against this one's
-broadleaf canopy.
-
-![A tree grown by space colonization](docs/colonized.png)
-
-*`plant-gen --colonize` — 650 attraction points consumed into 2,605 branch
-segments plus a leaf at every tip, 19,361 voxels. No grammar was involved in
-making this.*
-
-It knows nothing about L-systems and produces a `turtle::Skeleton` **directly**,
-so the voxelizer, the `.vox` exporter, the viewer, the metrics, the seed sheets
-and the provenance sidecar all consume it unchanged. That seam already existing
-is what made a second generator cheap.
-
-Four things worth knowing:
-
-- **Branches need momentum.** Following the raw average of whatever is pulling a
-  tip makes limbs visibly zigzag. Blending in the direction the branch is already
-  travelling (`straightness`) is what makes a limb read as a limb.
-- **Leaves are polygons, not green twigs.** The first version coloured thin
-  branches green, which claims foliage where there is only wood — and at any
-  reasonable voxel size every twig is forced to the same one-voxel width, so the
-  whole crown became a mass of identical green tubes. Real leaf quads at the tips
-  fixed it, and the branch ramp now reads as wood.
-- **The trunk phase is not optional.** With the crown above the root, nothing is
-  ever within influence range and the algorithm returns a single node. It grows
-  straight at the crown until something comes into reach. A test places the crown
-  at 4 units and requires the tree to get there.
-- **Nearest-node search is bucketed.** The naive form is "for every attractor,
-  scan every node" — O(A·N) per iteration, a few hundred points against a few
-  thousand nodes, hundreds of times over. Nodes go into a uniform grid with
-  influence-radius cells, so the scan is a fixed 27 cell lookups.
-- **Thickness comes from the pipe model**, not Murray's law on tip counts:
-  `r^n = ownLength + Σ child r^n`, solved in one reverse pass since a node is
-  always appended after its parent. Murray on tip counts is correct at a fork but
-  *exactly constant* along an unbranched chain, which renders a trunk as a
-  uniform tube. Length accumulation makes it strictly decreasing — though only
-  slightly over a short bole, since nearly all the length lives in the crown.
-
-  The radii are then **scaled so the root lands on a configured `trunkRadius`**.
-  This matters more than the taper rule: solved raw, the trunk's absolute
-  thickness depends on how many twigs happened to grow, and the first version
-  came out at a 1:6 diameter-to-height ratio where real trees are 1:20 or
-  thinner. That was the fat tube in the first render, and this is what fixed it.
-
-  Raising the exponent tapers more *gently*, not faster: `r/rRoot =
-  (acc/accRoot)^(1/n)`, and a ratio below one raised to a smaller power sits
-  closer to one.
 
 ## The turtle
 

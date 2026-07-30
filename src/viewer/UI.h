@@ -23,15 +23,10 @@ struct GrowthPlayback {
     bool loop = true;
 };
 
-/// Which algorithm grows the plant. Both produce a turtle::Skeleton, so
-/// everything downstream is indifferent to the choice.
-enum class Generator { LSystem, SpaceColonization };
-
 /// Everything the sliders drive. Which stages of the pipeline have to rerun is
 /// decided by comparing two of these, so the UI never has to know about the
 /// pipeline at all.
 struct PlantParams {
-    Generator generator = Generator::LSystem;
     int presetIndex = 0;
     int iterations = 12;
     int seed = 1;
@@ -43,18 +38,6 @@ struct PlantParams {
     /// Side length of the specimen grid: 1 is a single plant, 3 lays out nine
     /// from nine consecutive seeds.
     int sheetSize = 1;
-
-    // Space colonization only. The crown is an ellipsoid of attraction points;
-    // its proportions are what shape the tree, in place of grammar rules.
-    int attractors = 900;
-    float crownWidth = 1.2f;
-    float crownHeight = 1.4f;
-    float crownRise = 2.2f;
-    float influenceRadius = 0.75f;
-    float killDistance = 0.16f;
-    float stepLength = 0.09f;
-    float taperExponent = 2.2f;
-    float trunkRadius = 0.055f;
 };
 
 enum class ViewMode { Voxels, Lines, Both };
@@ -86,13 +69,6 @@ struct SceneStats {
     int specimens = 1;
     /// Box-counting dimension of the voxel model; 0 when too small to measure.
     double dimension = 0.0;
-
-    /// Space colonization reports nodes and attractors where the L-system
-    /// reports modules; `colonized` says which set is meaningful.
-    bool colonized = false;
-    std::size_t nodes = 0;
-    std::size_t attractorsReached = 0;
-    std::size_t attractorsTotal = 0;
 
     double expandMs = 0.0;
     double skeletonMs = 0.0;

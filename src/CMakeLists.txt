@@ -33,19 +33,6 @@ target_link_libraries(plant_turtle
     PUBLIC  plant::lsystem glm::glm
     PRIVATE plant::options)
 
-# ------------------------------------------------------------------ colonize
-# A second, unrelated way to grow a tree. It knows nothing about L-systems and
-# depends on plant::turtle only for the Skeleton type, which is the pipeline's
-# shared intermediate representation rather than a turtle detail.
-add_library(plant_colonize STATIC
-    colonize/Colonize.cpp)
-add_library(plant::colonize ALIAS plant_colonize)
-
-target_include_directories(plant_colonize PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(plant_colonize
-    PUBLIC  plant::turtle glm::glm
-    PRIVATE plant::options)
-
 # ------------------------------------------------------------------ voxelize
 add_library(plant_voxelize STATIC
     voxelize/VoxelGrid.cpp
@@ -82,8 +69,7 @@ target_link_libraries(plant_viewer
 # ---------------------------------------------------------------- executable
 add_executable(plant-gen main.cpp)
 target_link_libraries(plant-gen
-    PRIVATE plant::options plant::viewer plant::turtle plant::voxelize plant::export plant::grammar_io plant::colonize
-            imgui::imgui)
+    PRIVATE plant::options plant::viewer plant::turtle plant::voxelize plant::export plant::grammar_io imgui::imgui)
 
 # GLFW pulls in the Win32 console subsystem by default, which is what we want
 # during development: the app logs to stdout.

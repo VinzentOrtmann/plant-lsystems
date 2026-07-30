@@ -1,5 +1,4 @@
-﻿#include "colonize/Colonize.h"
-#include "export/VoxWriter.h"
+﻿#include "export/VoxWriter.h"
 #include "lsystem/GrammarIO.h"
 #include "lsystem/LSystem.h"
 #include "lsystem/Presets.h"
@@ -43,19 +42,12 @@ struct Options {
     int captureFrames = 1;
     /// Non-empty means "restore everything from this .vox.json sidecar".
     std::string loadPath;
-    /// Start on the space colonization generator instead of the L-system.
-    bool colonize = false;
 };
 
 void printUsage() {
     std::printf(
         "usage: plant-gen [preset] [iterations] [seed] [resolution]\n"
-        "                 [-o out.vox] [--sheet N] [--colonize]\n"
-        "                 [--presets DIR] [--dump-presets DIR] [--load rec.vox.json]\n"
-        "                 [--capture DIR [--capture-frames N]]\n"
-        "\n"
-        "--colonize starts on the space colonization generator, which ignores the\n"
-        "grammar entirely and grows towards a cloud of attraction points instead.\n"
+        "                 [-o out.vox] [--sheet N]\n                 [--presets DIR] [--dump-presets DIR]\n"
         "\n"
         "Grammars are loaded from DIR (default: the nearest assets/presets), and\n"
         "reloaded automatically when a file there changes. Falls back to the\n"
@@ -113,10 +105,6 @@ bool parseOptions(int argc, char** argv, Options& options) {
             options.captureFrames = std::max(1, std::atoi(value.c_str()));
             continue;
         }
-        if (argument == "--colonize") {
-            options.colonize = true;
-            continue;
-        }
         if (argument == "--sheet") {
             std::string value;
             if (!takeValue(value)) {
@@ -161,20 +149,8 @@ double millisecondsSince(std::chrono::steady_clock::time_point start) {
 enum class Stage { None = 0, Voxelize = 1, Skeleton = 2, Expand = 3 };
 
 Stage stageFor(const viewer::PlantParams& before, const viewer::PlantParams& after) {
-    if (before.generator != after.generator || before.presetIndex != after.presetIndex ||
-        before.iterations != after.iterations || before.seed != after.seed ||
-        before.sheetSize != after.sheetSize) {
-        return Stage::Expand;
-    }
-    // Space colonization builds its skeleton in one shot from these, so a change
-    // to any of them means regrowing rather than re-walking a word.
-    if (after.generator == viewer::Generator::SpaceColonization &&
-        (before.attractors != after.attractors || before.crownWidth != after.crownWidth ||
-         before.crownHeight != after.crownHeight || before.crownRise != after.crownRise ||
-         before.influenceRadius != after.influenceRadius ||
-         before.killDistance != after.killDistance || before.stepLength != after.stepLength ||
-         before.taperExponent != after.taperExponent ||
-         before.trunkRadius != after.trunkRadius)) {
+    if (before.presetIndex != after.presetIndex || before.iterations != after.iterations ||
+        before.seed != after.seed || before.sheetSize != after.sheetSize) {
         return Stage::Expand;
     }
     if (before.angleScale != after.angleScale || before.thicknessScale != after.thicknessScale ||
@@ -257,70 +233,16 @@ public:
 
     /// Runs `from` and every stage after it. Returns false and leaves the last
     /// good result in place if the parameters produce something unbuildable.
-    /// Space colonization does not rewrite a word and never runs the turtle: it
-    /// produces the skeletons directly. Both paths converge on `skeletons_`,
-    /// after which nothing downstream can tell them apart.
-    bool regrowColonized(const viewer::PlantParams& params) {
-        const int specimens = std::max(1, params.sheetSize * params.sheetSize);
-        colonize::ColonizeConfig config;
-        config.attractorCount = params.attractors;
-        config.crownCentre = {0.0f, params.crownRise, 0.0f};
-        config.crownRadii = {params.crownWidth, params.crownHeight, params.crownWidth};
-        config.influenceRadius = params.influenceRadius;
-        config.killDistance = params.killDistance;
-        config.stepLength = params.stepLength;
-        config.taperExponent = params.taperExponent;
-        config.trunkRadius = params.trunkRadius;
-
-        const auto start = std::chrono::steady_clock::now();
-        skeletons_.clear();
-        words_.clear();
-        generations_.clear();
-        colonizeStats_ = {};
-        for (int index = 0; index < specimens; ++index) {
-            colonize::ColonizeStats stats;
-            skeletons_.push_back(
-                colonize::grow(config, static_cast<std::uint32_t>(params.seed + index), &stats));
-            colonizeStats_.nodes += stats.nodes;
-            colonizeStats_.attractorsReached += stats.attractorsReached;
-            colonizeStats_.attractorsTotal += stats.attractorsTotal;
-            colonizeStats_.iterations = std::max(colonizeStats_.iterations, stats.iterations);
-        }
-        // Reported as the rewriting stage: it is the same slot in the pipeline,
-        // and the panel labels it per generator.
-        stats_.expandMs = millisecondsSince(start);
-        stats_.skeletonMs = 0.0;
-        stats_.cachedGenerations = 0;
-        stats_.servedFromCache = false;
-        stats_.description = "Space colonization: " + std::to_string(colonizeStats_.attractorsReached) +
-                             " of " + std::to_string(colonizeStats_.attractorsTotal) +
-                             " attractors reached in " + std::to_string(colonizeStats_.iterations) +
-                             " iterations.";
-        layOut(params);
-        return true;
-    }
-
     bool rebuild(const viewer::PlantParams& params, Stage from) {
-        const bool colonized = params.generator == viewer::Generator::SpaceColonization;
-
         // An empty cache means the last rebuild threw before producing a
         // generation -- a reload that brought in a grammar which does not
         // compile. Later stages read the cache directly, so a skeleton-only
         // rebuild would index an empty vector; retry the expansion instead.
-        if (!colonized && generations_.empty()) {
-            from = Stage::Expand;
-        }
-        // The colonizer owns its skeletons outright, so anything short of a
-        // regrow would leave the previous generator's geometry in place.
-        if (colonized && skeletons_.empty()) {
+        if (generations_.empty()) {
             from = Stage::Expand;
         }
         try {
-            if (colonized) {
-                if (from >= Stage::Expand) {
-                    regrowColonized(params);
-                }
-            } else if (from >= Stage::Expand) {
+            if (from >= Stage::Expand) {
                 const auto& source = sources_[static_cast<std::size_t>(params.presetIndex)];
                 if (params.presetIndex != compiledIndex_) {
                     system_ = lsystem::LSystem::compile(source);
@@ -334,7 +256,7 @@ public:
                 stats_.cachedGenerations = static_cast<int>(generations_.size());
             }
 
-            if (!colonized && from >= Stage::Skeleton) {
+            if (from >= Stage::Skeleton) {
                 turtle::TurtleConfig config;
                 config.angleScale = params.angleScale;
                 config.radiusScale = params.thicknessScale;
@@ -359,18 +281,10 @@ public:
             stats_.segments = 0;
             stats_.maxDepth = 0;
             for (std::size_t i = 0; i < skeletons_.size(); ++i) {
-                // Colonized trees have no word behind them; the panel shows
-                // nodes instead of modules for those.
-                if (i < words_.size()) {
-                    stats_.modules += words_[i].size();
-                }
+                stats_.modules += words_[i].size();
                 stats_.segments += skeletons_[i].segments.size();
                 stats_.maxDepth = std::max(stats_.maxDepth, skeletons_[i].maxDepth());
             }
-            stats_.colonized = colonized;
-            stats_.nodes = colonizeStats_.nodes;
-            stats_.attractorsReached = colonizeStats_.attractorsReached;
-            stats_.attractorsTotal = colonizeStats_.attractorsTotal;
             stats_.specimens = static_cast<int>(skeletons_.size());
             stats_.boundsMin = boundsMin_;
             stats_.boundsMax = boundsMax_;
@@ -525,7 +439,6 @@ private:
     glm::vec3 boundsMax_{0.0f};
     voxelize::VoxelGrid grid_;
     voxelize::RasterizerConfig rasterizer_;
-    colonize::ColonizeStats colonizeStats_;
     viewer::SceneStats stats_;
     std::string error_;
 };
@@ -669,30 +582,11 @@ int main(int argc, char** argv) {
         }
 
         viewer::PlantParams params;
-        // PlantParams has to mirror the colonizer's knobs so the UI can bind
-        // sliders to them, but the defaults live in exactly one place: copy them
-        // across rather than writing the numbers down twice and watching them
-        // drift apart.
-        {
-            const colonize::ColonizeConfig defaults;
-            params.attractors = defaults.attractorCount;
-            params.crownWidth = defaults.crownRadii.x;
-            params.crownHeight = defaults.crownRadii.y;
-            params.crownRise = defaults.crownCentre.y;
-            params.influenceRadius = defaults.influenceRadius;
-            params.killDistance = defaults.killDistance;
-            params.stepLength = defaults.stepLength;
-            params.trunkRadius = defaults.trunkRadius;
-            params.taperExponent = defaults.taperExponent;
-        }
         params.presetIndex = static_cast<int>(std::distance(names.begin(), found));
         params.iterations = options.iterations;
         params.seed = static_cast<int>(options.seed);
         params.resolution = options.resolution;
         params.sheetSize = options.sheetSize;
-        if (options.colonize) {
-            params.generator = viewer::Generator::SpaceColonization;
-        }
 
         if (!options.loadPath.empty()) {
             // The grammar travels inside the record, so this reproduces the
