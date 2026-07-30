@@ -20,6 +20,13 @@
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
     },
     {
+      "name": "ci",
+      "displayName": "Whatever toolchain is installed",
+      "description": "Pins no generator, so it builds against any Visual Studio version or any Unix toolchain. Used by CI, where pinning one proved to be exactly the wrong bet.",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
+    },
+    {
       "name": "ninja",
       "displayName": "Ninja (single-config)",
       "description": "Faster builds. On Windows, run from a Developer Command Prompt so cl.exe is on PATH.",
@@ -31,7 +38,8 @@
   "buildPresets": [
     { "name": "msvc", "configurePreset": "msvc", "configuration": "Debug" },
     { "name": "msvc-release", "configurePreset": "msvc", "configuration": "RelWithDebInfo" },
-    { "name": "ninja", "configurePreset": "ninja" }
+    { "name": "ninja", "configurePreset": "ninja" },
+    { "name": "ci", "configurePreset": "ci", "configuration": "RelWithDebInfo" }
   ],
   "testPresets": [
     {
@@ -49,6 +57,12 @@
     {
       "name": "ninja",
       "configurePreset": "ninja",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "ci",
+      "configurePreset": "ci",
+      "configuration": "RelWithDebInfo",
       "output": { "outputOnFailure": true }
     }
   ]

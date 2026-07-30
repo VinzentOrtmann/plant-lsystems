@@ -553,6 +553,19 @@ Presets live in [CMakePresets.json](CMakePresets.json):
 - `msvc` — Visual Studio 2022 generator, x64. Works from an ordinary shell.
 - `ninja` — single-config Ninja. On Windows, run it from a Developer Command
   Prompt so `cl.exe` is on `PATH`.
+- `ci` — pins no generator at all, so it builds against whatever toolchain is
+  installed. Use this if `msvc` cannot find your Visual Studio; pinning a
+  version is convenient right up until the machine has a different one.
+
+On Linux, GLFW needs development headers for both display stacks to configure —
+since 3.4 it builds Wayland support by default, and a missing `wayland-scanner`
+fails the configure outright:
+
+```bash
+sudo apt-get install -y ninja-build libgl1-mesa-dev \
+  libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+  libwayland-dev libwayland-bin wayland-protocols libxkbcommon-dev
+```
 
 To produce something you can hand to someone else:
 

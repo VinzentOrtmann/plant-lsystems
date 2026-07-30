@@ -25,7 +25,7 @@ jobs:
       - name: Cache dependencies
         uses: actions/cache@v4
         with:
-          path: build/msvc/_deps
+          path: build/ci/_deps
           key: deps-windows-${{ hashFiles('cmake/Dependencies.cmake', 'cmake/Glad.cmake') }}
 
       - name: Tool versions
@@ -37,17 +37,17 @@ jobs:
       - name: Configure
         run: |
           set -o pipefail
-          cmake --preset msvc 2>&1 | tee configure.log
+          cmake --preset ci 2>&1 | tee configure.log
 
       - name: Build
         run: |
           set -o pipefail
-          cmake --build --preset msvc-release 2>&1 | tee build.log
+          cmake --build --preset ci 2>&1 | tee build.log
 
       - name: Test
         run: |
           set -o pipefail
-          ctest --preset msvc-release 2>&1 | tee test.log
+          ctest --preset ci 2>&1 | tee test.log
 
       - name: Report failure
         if: failure()
@@ -72,14 +72,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # GLFW needs the X11 development headers to configure, even though
-      # nothing here opens a window.
+      # GLFW needs development headers for both display stacks to configure,
+      # even though nothing here opens a window. As of 3.4 it builds Wayland
+      # support by default, so wayland-scanner and the protocol definitions are
+      # required too -- omitting them fails the configure outright.
       - name: Install system packages
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            ninja-build python3-venv libgl1-mesa-dev libx11-dev libxrandr-dev \
-            libxinerama-dev libxcursor-dev libxi-dev
+            ninja-build python3-venv libgl1-mesa-dev \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+            libwayland-dev libwayland-bin wayland-protocols libxkbcommon-dev
 
       - name: Cache dependencies
         uses: actions/cache@v4
