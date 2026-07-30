@@ -73,7 +73,7 @@ void applyTaper(std::vector<Segment>& segments, float tipTaper) {
     }
 }
 
-void computeBounds(Skeleton& skeleton) {
+void recomputeBoundsImpl(Skeleton& skeleton) {
     if (skeleton.empty()) {
         skeleton.boundsMin = glm::vec3(0.0f);
         skeleton.boundsMax = glm::vec3(0.0f);
@@ -99,6 +99,10 @@ void computeBounds(Skeleton& skeleton) {
 }
 
 }  // namespace
+
+void recomputeBounds(Skeleton& skeleton) {
+    recomputeBoundsImpl(skeleton);
+}
 
 Skeleton buildSkeleton(const lsystem::Word& word, const TurtleConfig& config) {
     Skeleton skeleton;
@@ -252,7 +256,7 @@ Skeleton buildSkeleton(const lsystem::Word& word, const TurtleConfig& config) {
     }
 
     applyTaper(skeleton.segments, config.tipTaper);
-    computeBounds(skeleton);
+    recomputeBounds(skeleton);
     return skeleton;
 }
 
