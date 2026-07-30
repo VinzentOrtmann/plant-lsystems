@@ -31,8 +31,8 @@ jobs:
       - name: Tool versions
         run: |
           cmake --version
-          python --version || true
-          python3 --version || true
+          python --version || echo "no python"
+          python3 --version || echo "no python3"
 
       - name: Configure
         run: |
@@ -60,6 +60,10 @@ jobs:
               tail -n 150 "$f"
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
+            # Also as an annotation: unlike a summary, that is readable through
+            # the API without an authenticated log download.
+            esc=$(tail -n 40 "$f" | sed -e 's/%/%25/g' -e 's/\r//g' | sed -z 's/\n/%0A/g')
+            echo "::error title=windows-${f}::${esc}"
           done
 
   linux:
@@ -122,4 +126,6 @@ jobs:
               tail -n 150 "$f"
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
+            esc=$(tail -n 40 "$f" | sed -e 's/%/%25/g' -e 's/\r//g' | sed -z 's/\n/%0A/g')
+            echo "::error title=linux-${f}::${esc}"
           done
