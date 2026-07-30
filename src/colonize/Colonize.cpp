@@ -80,24 +80,76 @@ private:
     std::unordered_map<std::int64_t, std::vector<int>> cells_;
 };
 
-/// Murray's law, applied from the twigs inwards: a branch is thick enough to
-/// carry everything above it. Nodes are appended after their parent, so one
-/// reverse pass suffices.
-std::vector<float> solveRadii(const std::vector<Node>& nodes, float tipRadius,
+/// Pipe model, applied from the twigs inwards: a branch is thick in proportion
+/// to the total length of wood it carries. Nodes are appended after their
+/// parent, so one reverse pass suffices.
+///
+/// Accumulating *length* rather than tip counts is what makes a trunk taper.
+/// Murray's law on tip counts is right at a fork but constant along an
+/// unbranched chain, which renders a trunk as a uniform tube. Here
+/// `r^n = ownLength + sum of child r^n`, so the extra own-length term shrinks
+/// the radius at every step even where nothing branches.
+///
+/// The result is then scaled so the root lands on `trunkRadius`: the raw rule's
+/// absolute answer depends on how many twigs happened to grow, which is not
+/// something a user should have to compensate for.
+std::vector<float> solveRadii(const std::vector<Node>& nodes, float trunkRadius, float tipRadius,
                               float exponent) {
-    const auto power = static_cast<double>(std::max(0.1f, exponent));
+    const auto power = static_cast<double>(std::max(0.5f, exponent));
     std::vector<double> carried(nodes.size(), 0.0);
-    std::vector<float> radius(nodes.size(), tipRadius);
 
-    for (std::size_t i = nodes.size(); i-- > 0;) {
-        radius[i] = carried[i] > 0.0 ? static_cast<float>(std::pow(carried[i], 1.0 / power))
-                                     : tipRadius;
-        if (nodes[i].parent >= 0) {
-            carried[static_cast<std::size_t>(nodes[i].parent)] +=
-                std::pow(static_cast<double>(radius[i]), power);
-        }
+    for (std::size_t i = nodes.size(); i-- > 1;) {
+        const auto parent = static_cast<std::size_t>(nodes[i].parent);
+        carried[i] += glm::distance(nodes[i].position, nodes[parent].position);
+        carried[parent] += carried[i];
+    }
+
+    std::vector<float> radius(nodes.size(), tipRadius);
+    const double rootCarried = std::max(carried[0], 1e-9);
+    const double scale = static_cast<double>(trunkRadius) / std::pow(rootCarried, 1.0 / power);
+    for (std::size_t i = 0; i < nodes.size(); ++i) {
+        const double raw = std::pow(std::max(carried[i], 0.0), 1.0 / power) * scale;
+        radius[i] = std::max(tipRadius, static_cast<float>(raw));
     }
     return radius;
+}
+
+/// A diamond leaf at every childless node, lying along the branch it caps and
+/// rolled by a random amount so a canopy is not a field of parallel plates.
+void growLeaves(turtle::Skeleton& skeleton, const std::vector<Node>& nodes, float size,
+                std::mt19937& rng) {
+    if (size <= 0.0f) {
+        return;
+    }
+    for (std::size_t i = 1; i < nodes.size(); ++i) {
+        if (nodes[i].childCount != 0) {
+            continue;
+        }
+        const auto parent = static_cast<std::size_t>(nodes[i].parent);
+        const glm::vec3 along = nodes[i].position - nodes[parent].position;
+        const float travelled = glm::length(along);
+        if (travelled < 1e-6f) {
+            continue;
+        }
+        const glm::vec3 forward = along / travelled;
+
+        // Any vector off the branch axis will do for the leaf's width; picking
+        // the world axis the branch leans on least keeps the cross product well
+        // conditioned however the twig happens to point.
+        const glm::vec3 fallback = std::fabs(forward.y) < 0.9f ? glm::vec3(0.0f, 1.0f, 0.0f)
+                                                              : glm::vec3(1.0f, 0.0f, 0.0f);
+        glm::vec3 across = glm::normalize(glm::cross(forward, fallback));
+        const glm::vec3 other = glm::cross(forward, across);
+        const float roll = canonicalRandom(rng) * 6.28318531f;
+        across = glm::normalize(across * std::cos(roll) + other * std::sin(roll));
+
+        const glm::vec3 base = nodes[i].position;
+        const float half = size * 0.5f;
+        skeleton.polygons.push_back(turtle::Polygon{
+            {base, base + forward * half + across * half, base + forward * size,
+             base + forward * half - across * half},
+            nodes[i].depth});
+    }
 }
 
 }  // namespace
@@ -208,7 +260,25 @@ turtle::Skeleton grow(const ColonizeConfig& config, std::uint32_t seed, Colonize
             if (length < 1e-6f) {
                 continue;  // pulls cancelled out exactly
             }
-            const glm::vec3 direction = nodes[i].pull / length;
+            // Blend in the direction this branch is already travelling. Without
+            // it a tip chases the instantaneous average of its attractors and
+            // the limb visibly zigzags.
+            glm::vec3 direction = nodes[i].pull / length;
+            if (config.straightness > 0.0f) {
+                const glm::vec3 travelling =
+                    nodes[i].parent >= 0
+                        ? nodes[i].position - nodes[static_cast<std::size_t>(nodes[i].parent)].position
+                        : glm::vec3(0.0f, 1.0f, 0.0f);
+                const float travelled = glm::length(travelling);
+                if (travelled > 1e-6f) {
+                    const glm::vec3 blended =
+                        direction + (travelling / travelled) * config.straightness;
+                    const float blendedLength = glm::length(blended);
+                    if (blendedLength > 1e-6f) {
+                        direction = blended / blendedLength;
+                    }
+                }
+            }
             // The first child continues the branch; later ones start new ones,
             // which is what the depth means downstream when colouring.
             const int depth = nodes[i].childCount == 0 ? nodes[i].depth : nodes[i].depth + 1;
@@ -236,7 +306,8 @@ turtle::Skeleton grow(const ColonizeConfig& config, std::uint32_t seed, Colonize
         }
     }
 
-    const std::vector<float> radii = solveRadii(nodes, config.tipRadius, config.radiusExponent);
+    const std::vector<float> radii =
+        solveRadii(nodes, config.trunkRadius, config.tipRadius, config.taperExponent);
 
     turtle::Skeleton skeleton;
     skeleton.segments.reserve(nodes.size() > 0 ? nodes.size() - 1 : 0);
@@ -253,6 +324,11 @@ turtle::Skeleton grow(const ColonizeConfig& config, std::uint32_t seed, Colonize
         segment.depth = nodes[i].depth;
         skeleton.segments.push_back(segment);
     }
+
+    // Seeded separately from the attraction cloud so that changing the leaf size
+    // does not reshuffle the tree it hangs on.
+    std::mt19937 leafRng(seed ^ 0x9E3779B9u);
+    growLeaves(skeleton, nodes, config.leafSize, leafRng);
     turtle::recomputeBounds(skeleton);
 
     if (stats != nullptr) {

@@ -1,3 +1,4 @@
+#include "colonize/Colonize.h"
 #include "export/VoxWriter.h"
 #include "lsystem/LSystem.h"
 #include "lsystem/Presets.h"
@@ -84,11 +85,11 @@ struct Golden {
 
 // Regenerate by running the suite and reading the reported values.
 constexpr Golden kGolden[] = {
-    {"simple-tree", 12, 1, 64, 2987, 3310, 17782319226457306343ull, 13850420543832329959ull},
-    {"fern", 12, 1, 64, 4078, 1668, 6553197162041478021ull, 14525528342756418829ull},
-    {"bush", 10, 7, 64, 426, 1573, 1534628028445969298ull, 5097387774797179ull},
-    {"signal", 16, 1, 64, 960, 1756, 10382110652006263547ull, 11102250356092446101ull},
-    {"leafy", 8, 3, 64, 508, 4759, 10922910856313797595ull, 10044336197159236160ull},
+    {"simple-tree", 12, 1, 64, 2987, 3310, 14067210925946430053ull, 3638229008514955847ull},
+    {"fern", 12, 1, 64, 4078, 1668, 164283778307589542ull, 3960066648561040582ull},
+    {"bush", 10, 7, 64, 426, 1573, 2496146271909031262ull, 14761224497925840811ull},
+    {"signal", 16, 1, 64, 960, 1756, 12151503097936858722ull, 12453262271469543064ull},
+    {"leafy", 8, 3, 64, 508, 4759, 10515119328464745127ull, 7564111705530749552ull},
 };
 
 voxelize::VoxelGrid buildGrid(const Golden& golden, turtle::Skeleton& skeleton,
@@ -129,6 +130,33 @@ TEST_CASE("presets produce byte-identical output", "[golden]") {
         CHECK(gridHash == golden.gridHash);
         CHECK(fileHash == golden.voxFileHash);
     }
+}
+
+TEST_CASE("space colonization output is pinned too", "[golden]") {
+    // The other generator gets the same treatment: nothing else in the suite
+    // would notice it quietly growing a different tree.
+    colonize::ColonizeConfig config;
+    config.attractorCount = 400;
+    config.crownCentre = {0.0f, 1.6f, 0.0f};
+    config.crownRadii = {0.9f, 0.8f, 0.9f};
+    config.maxIterations = 300;
+
+    const turtle::Skeleton skeleton = colonize::grow(config, 5);
+    voxelize::RasterizerConfig raster;
+    raster.voxelSize = voxelize::voxelSizeForResolution(skeleton, 64);
+    const voxelize::VoxelGrid grid = voxelize::voxelize(skeleton, raster);
+    const std::vector<std::uint8_t> encoded = vox::encodeVox(
+        grid, vox::barkToLeafPalette(raster.firstColor, raster.colorCount, raster.polygonColor));
+
+    const std::uint64_t gridHash = hashGrid(grid);
+    const std::uint64_t fileHash = hashBytes(encoded);
+    INFO("    segments " << skeleton.segments.size() << ", voxels " << grid.voxelCount()
+                         << ", grid " << gridHash << "ull, file " << fileHash << "ull");
+
+    CHECK(skeleton.segments.size() == 802);
+    CHECK(grid.voxelCount() == 3299);
+    CHECK(gridHash == 2151284845227448177ull);
+    CHECK(fileHash == 15156042001926033990ull);
 }
 
 TEST_CASE("every preset is covered by a golden hash", "[golden]") {

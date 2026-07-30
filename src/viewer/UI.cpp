@@ -119,10 +119,11 @@ void UI::draw(const std::vector<std::string>& presetNames, PlantParams& params,
             }
             ImGui::SliderFloat("kill distance", &params.killDistance, 0.02f, 0.6f, "%.3f");
             ImGui::SliderFloat("step", &params.stepLength, 0.02f, 0.3f, "%.3f");
-            ImGui::SliderFloat("Murray exponent", &params.radiusExponent, 1.5f, 3.5f, "%.2f");
+            ImGui::SliderFloat("trunk radius", &params.trunkRadius, 0.01f, 0.2f, "%.3f");
+            ImGui::SliderFloat("taper", &params.taperExponent, 1.2f, 4.0f, "%.2f");
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Thickness rule: parent^n = sum of child^n.\n"
-                                  "2 conserves cross-sectional area; real trees measure ~2.5.");
+                ImGui::SetTooltip("Pipe model: r^n = own length + sum of child r^n.\n"
+                                  "Higher tapers more gently.");
             }
 
             ImGui::Spacing();

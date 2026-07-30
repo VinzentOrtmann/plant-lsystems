@@ -29,31 +29,57 @@ namespace plant::colonize {
 struct ColonizeConfig {
     /// Attraction points are sampled uniformly inside this ellipsoid: the
     /// volume the crown will grow to fill.
-    glm::vec3 crownCentre{0.0f, 2.2f, 0.0f};
-    glm::vec3 crownRadii{1.2f, 1.4f, 1.2f};
-    int attractorCount = 900;
+    glm::vec3 crownCentre{0.0f, 1.9f, 0.0f};
+    glm::vec3 crownRadii{1.1f, 1.0f, 1.1f};
+    int attractorCount = 650;
 
     /// How far a point can reach to influence a node. Too small and growth
     /// stalls; too large and every point pulls on everything, which averages
     /// into a single fat trunk.
-    float influenceRadius = 0.75f;
+    float influenceRadius = 0.7f;
     /// How close a node must get before the point is considered reached and
-    /// removed. This sets the density of the twigs.
-    float killDistance = 0.16f;
+    /// removed. Large relative to the step and each tip clears a wide sphere per
+    /// advance, which is what turns branches into short stubs.
+    float killDistance = 0.14f;
     /// How far a node advances per iteration.
-    float stepLength = 0.09f;
-    int maxIterations = 400;
+    float stepLength = 0.06f;
+    int maxIterations = 600;
+
+    /// How much of a branch's existing direction carries into its next step.
+    /// At zero a tip follows the raw average of whatever is pulling it and
+    /// wanders visibly; the momentum is what makes a limb read as a limb.
+    float straightness = 0.55f;
+
+    /// Edge of the diamond leaf placed at every branch tip. Zero grows a bare
+    /// winter tree.
+    ///
+    /// Worth having rather than colouring the twigs green: a leafless structure
+    /// painted green claims foliage where there is only wood, which is most of
+    /// why the first version of this looked wrong.
+    float leafSize = 0.14f;
 
     glm::vec3 origin{0.0f};
     /// The trunk grows straight towards the crown until something is in reach,
     /// otherwise a crown placed above the root would never be found.
     int maxTrunkSteps = 200;
 
-    /// Radius of a twig with no children.
-    float tipRadius = 0.012f;
-    /// Murray's law exponent: parentRadius^n = sum of childRadius^n. 2 conserves
-    /// cross-sectional area through a fork; real trees measure nearer 2.5.
-    float radiusExponent = 2.4f;
+    /// Radius at the base of the trunk. Radii are solved by the taper rule and
+    /// then scaled so the root lands exactly here, which is the only way to keep
+    /// trunk thickness controllable: the raw rule's answer depends on how many
+    /// twigs happened to grow.
+    float trunkRadius = 0.07f;
+    /// Floor for the thinnest twig.
+    float tipRadius = 0.014f;
+    /// Pipe-model exponent. A node's radius goes as the total branch length
+    /// above it, raised to 1/n, so `r^n = ownLength + sum of child r^n`.
+    ///
+    /// Length-driven rather than Murray's law on tip counts, which is *exactly*
+    /// constant along an unbranched chain. Accumulating length makes it strictly
+    /// decreasing instead, though only slightly over a short bole: nearly all the
+    /// length lives in the crown. Raising n tapers more *gently*, since
+    /// r/rRoot = (acc/accRoot)^(1/n) and a ratio below one raised to a smaller
+    /// power sits closer to one.
+    float taperExponent = 2.2f;
 };
 
 struct ColonizeStats {

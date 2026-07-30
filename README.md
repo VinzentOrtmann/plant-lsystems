@@ -31,7 +31,7 @@ Built in milestones; this is where things stand.
 | 4 | Voxelizer: tapered-cylinder sweep into a sparse grid | **done** |
 | 5 | MagicaVoxel `.vox` writer | **done** |
 | 6 | Live viewer: voxel rendering + ImGui parameter sliders | **done** |
-| 7 | Catch2 coverage for expansion and voxelization | ongoing (170 tests) |
+| 7 | Catch2 coverage for expansion and voxelization | ongoing (173 tests) |
 
 Since the milestones, following *The Algorithmic Beauty of Plants*: tropism
 (ch. 2), `random()` in expressions (ch. 7), context-sensitive productions with
@@ -166,16 +166,25 @@ broadleaf canopy.
 
 ![A tree grown by space colonization](docs/colonized.png)
 
-*`plant-gen --colonize` — 900 attraction points consumed into 3,092 branch
-segments, 45,304 voxels. No grammar was involved in making this.*
+*`plant-gen --colonize` — 650 attraction points consumed into 2,605 branch
+segments plus a leaf at every tip, 19,361 voxels. No grammar was involved in
+making this.*
 
 It knows nothing about L-systems and produces a `turtle::Skeleton` **directly**,
 so the voxelizer, the `.vox` exporter, the viewer, the metrics, the seed sheets
 and the provenance sidecar all consume it unchanged. That seam already existing
 is what made a second generator cheap.
 
-Three things worth knowing:
+Four things worth knowing:
 
+- **Branches need momentum.** Following the raw average of whatever is pulling a
+  tip makes limbs visibly zigzag. Blending in the direction the branch is already
+  travelling (`straightness`) is what makes a limb read as a limb.
+- **Leaves are polygons, not green twigs.** The first version coloured thin
+  branches green, which claims foliage where there is only wood — and at any
+  reasonable voxel size every twig is forced to the same one-voxel width, so the
+  whole crown became a mass of identical green tubes. Real leaf quads at the tips
+  fixed it, and the branch ramp now reads as wood.
 - **The trunk phase is not optional.** With the crown above the root, nothing is
   ever within influence range and the algorithm returns a single node. It grows
   straight at the crown until something comes into reach. A test places the crown
@@ -184,12 +193,22 @@ Three things worth knowing:
   scan every node" — O(A·N) per iteration, a few hundred points against a few
   thousand nodes, hundreds of times over. Nodes go into a uniform grid with
   influence-radius cells, so the scan is a fixed 27 cell lookups.
-- **Thickness comes from Murray's law**, `parent^n = Σ child^n`, solved in one
-  reverse pass since a node is always appended after its parent. Counter-intuitively
-  a *larger* exponent gives a *thinner* trunk: with k children of radius r the
-  parent is `k^(1/n)·r`, and `k^(1/n)` falls towards 1 as n grows. So n = 2, which
-  conserves cross-sectional area, is the widest, and pushing towards the ~2.5
-  measured in real trees narrows it. I had that backwards until a test said so.
+- **Thickness comes from the pipe model**, not Murray's law on tip counts:
+  `r^n = ownLength + Σ child r^n`, solved in one reverse pass since a node is
+  always appended after its parent. Murray on tip counts is correct at a fork but
+  *exactly constant* along an unbranched chain, which renders a trunk as a
+  uniform tube. Length accumulation makes it strictly decreasing — though only
+  slightly over a short bole, since nearly all the length lives in the crown.
+
+  The radii are then **scaled so the root lands on a configured `trunkRadius`**.
+  This matters more than the taper rule: solved raw, the trunk's absolute
+  thickness depends on how many twigs happened to grow, and the first version
+  came out at a 1:6 diameter-to-height ratio where real trees are 1:20 or
+  thinner. That was the fat tube in the first render, and this is what fixed it.
+
+  Raising the exponent tapers more *gently*, not faster: `r/rRoot =
+  (acc/accRoot)^(1/n)`, and a ratio below one raised to a smaller power sits
+  closer to one.
 
 ## The turtle
 

@@ -53,7 +53,8 @@ struct PlantParams {
     float influenceRadius = 0.75f;
     float killDistance = 0.16f;
     float stepLength = 0.09f;
-    float radiusExponent = 2.4f;
+    float taperExponent = 2.2f;
+    float trunkRadius = 0.055f;
 };
 
 enum class ViewMode { Voxels, Lines, Both };

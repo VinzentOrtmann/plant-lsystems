@@ -152,7 +152,7 @@ TEST_CASE("branches thicken towards the trunk", "[colonize][radii]") {
     // Radii live on nodes, and a segment's end radius is its distal node's, so a
     // parent's end radius equals each child's start radius by construction. The
     // claim with content is about the far ends: a parent is at least as thick as
-    // any single branch above it.
+    // any single branch above it, because it carries all of them.
     for (const turtle::Segment& segment : skeleton.segments) {
         if (segment.parent >= 0) {
             const turtle::Segment& parent =
@@ -166,14 +166,19 @@ TEST_CASE("branches thicken towards the trunk", "[colonize][radii]") {
     CHECK_THAT(skeleton.segments.front().startRadius, WithinAbs(skeleton.maxRadius(), 1e-5));
 }
 
-TEST_CASE("Murray's law holds at a fork", "[colonize][radii]") {
-    // r^n at a node equals the sum of r^n over the nodes directly above it,
-    // which is what makes the taper look structural rather than arbitrary.
+TEST_CASE("the pipe model relates a node to everything above it", "[colonize][radii]") {
+    // r^n at a node equals its own length plus the sum of r^n over the nodes
+    // directly above it. The own-length term is what Murray's law on tip counts
+    // lacks, and its absence is what renders a trunk as a uniform tube.
     colonize::ColonizeConfig config = quickConfig();
-    config.radiusExponent = 2.4f;
+    config.taperExponent = 2.2f;
+    // The floor is switched off for this one. It has to be: clamping a twig
+    // *upwards* can leave an unclamped parent thinner than the sum of its
+    // clamped children, so the identity only holds for the model itself.
+    config.tipRadius = 0.0f;
     const turtle::Skeleton skeleton = colonize::grow(config, 29);
+    const double n = 2.2;
 
-    const double n = 2.4;
     std::vector<double> carried(skeleton.segments.size(), 0.0);
     std::vector<int> children(skeleton.segments.size(), 0);
     for (const turtle::Segment& segment : skeleton.segments) {
@@ -189,31 +194,82 @@ TEST_CASE("Murray's law holds at a fork", "[colonize][radii]") {
         if (children[i] < 2) {
             continue;
         }
+        // Above a fork the children account for everything except the fork
+        // segment's own length, so the parent must be strictly thicker.
         ++forksChecked;
-        const double expected = std::pow(carried[i], 1.0 / n);
-        CHECK_THAT(static_cast<double>(skeleton.segments[i].endRadius),
-                   WithinAbs(expected, 1e-4));
+        const double childrenOnly = std::pow(carried[i], 1.0 / n);
+        const double actual = static_cast<double>(skeleton.segments[i].endRadius);
+        CHECK(actual >= childrenOnly - 1e-6);
+        CHECK(actual < childrenOnly * 1.5);  // and not wildly thicker
     }
     CHECK(forksChecked > 5);  // the tree really does fork
 }
 
-TEST_CASE("a larger exponent thins the trunk relative to its branches",
-          "[colonize][radii]") {
-    // Counter-intuitive until written out: with k children of radius r, the
-    // parent is (k*r^n)^(1/n) = k^(1/n) * r, and k^(1/n) falls towards 1 as n
-    // grows. So n = 2, which conserves cross-sectional area, gives the *widest*
-    // trunk, and pushing n up towards the ~2.5 measured in real trees narrows it.
-    colonize::ColonizeConfig area = quickConfig();
-    area.radiusExponent = 2.0f;
-    colonize::ColonizeConfig steeper = quickConfig();
-    steeper.radiusExponent = 3.0f;
+TEST_CASE("the trunk lands on the requested radius", "[colonize][radii]") {
+    // Solving the taper rule alone gives an absolute answer that depends on how
+    // many twigs happened to grow, which is not something a user should have to
+    // compensate for. Radii are scaled so the root hits trunkRadius exactly.
+    for (const float wanted : {0.02f, 0.055f, 0.15f}) {
+        colonize::ColonizeConfig config = quickConfig();
+        config.trunkRadius = wanted;
+        CAPTURE(wanted);
+        CHECK_THAT(colonize::grow(config, 31).segments.front().startRadius,
+                   WithinAbs(static_cast<double>(wanted), 1e-4));
+    }
+}
 
-    const float areaTrunk = colonize::grow(area, 31).segments.front().startRadius;
-    const float steeperTrunk = colonize::grow(steeper, 31).segments.front().startRadius;
-    CAPTURE(areaTrunk, steeperTrunk);
-    CHECK(steeperTrunk < areaTrunk);
-    // Both still start from the same twigs, so neither collapses.
-    CHECK(steeperTrunk > quickConfig().tipRadius);
+TEST_CASE("an unbranched bole narrows rather than staying constant",
+          "[colonize][radii]") {
+    // The difference from Murray's law on tip counts, which is *exactly* constant
+    // along a chain. Accumulating length instead makes it strictly decreasing.
+    //
+    // Only strictly, though, and worth being clear about: nearly all the
+    // accumulated length lives in the crown, so over a short bole the change is
+    // a fraction of a percent. What actually fixed the fat uniform trunk in the
+    // render was pinning the root to trunkRadius, not this.
+    colonize::ColonizeConfig high = quickConfig();
+    high.crownCentre = {0.0f, 3.0f, 0.0f};
+    high.tipRadius = 0.0f;
+    const turtle::Skeleton skeleton = colonize::grow(high, 5);
+
+    REQUIRE(skeleton.segments.size() > 20);
+    std::vector<int> children(skeleton.segments.size(), 0);
+    for (const turtle::Segment& segment : skeleton.segments) {
+        if (segment.parent >= 0) {
+            children[static_cast<std::size_t>(segment.parent)]++;
+        }
+    }
+    std::size_t last = 0;
+    while (last + 1 < skeleton.segments.size() && children[last] == 1) {
+        ++last;
+    }
+    REQUIRE(last > 4);  // there is a real bole to measure
+
+    // Monotonically narrowing all the way up it.
+    for (std::size_t i = 1; i <= last; ++i) {
+        CHECK(skeleton.segments[i].startRadius <= skeleton.segments[i - 1].startRadius);
+    }
+    CHECK(skeleton.segments[last].startRadius < skeleton.segments[0].startRadius);
+}
+
+TEST_CASE("a larger exponent tapers more gently", "[colonize][radii]") {
+    // The root is pinned to trunkRadius either way, so the exponent only shows
+    // up in how fast thickness falls off above it -- and it falls off *slower*
+    // as n rises, because r/rRoot = (acc/accRoot)^(1/n) and a ratio below one
+    // raised to a smaller power sits closer to one.
+    const auto midFraction = [](float exponent) {
+        colonize::ColonizeConfig config = quickConfig();
+        config.taperExponent = exponent;
+        config.tipRadius = 0.0f;
+        const turtle::Skeleton skeleton = colonize::grow(config, 31);
+        const turtle::Segment& mid = skeleton.segments[skeleton.segments.size() / 8];
+        return mid.startRadius / skeleton.segments.front().startRadius;
+    };
+
+    const float gentle = midFraction(3.5f);
+    const float steep = midFraction(1.5f);
+    CAPTURE(gentle, steep);
+    CHECK(steep < gentle);
 }
 
 // ---------------------------------------------------------------------------

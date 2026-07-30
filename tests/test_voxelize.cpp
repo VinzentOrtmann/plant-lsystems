@@ -461,18 +461,24 @@ TEST_CASE("thin twigs still rasterize to a connected trail", "[voxelize]") {
     CHECK(largestComponent(grid) == grid.voxelCount());
 }
 
-TEST_CASE("branch depth selects a colour from the ramp", "[voxelize]") {
+TEST_CASE("thickness selects a colour from the ramp", "[voxelize]") {
+    // Keyed on thickness rather than branch depth, because depth means different
+    // things to different generators: bracket nesting for the turtle, but for
+    // space colonization it increments at every non-first child and saturates
+    // almost at once, painting a limb off the trunk as a twig. Thickness is the
+    // same physical quantity either way.
     voxelize::RasterizerConfig config;
-    config.voxelSize = 0.1f;
+    config.voxelSize = 0.02f;
     config.firstColor = 10;
     config.colorCount = 4;
 
-    turtle::Skeleton skeleton = oneSegment({0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 0.05f, 0.05f);
-    turtle::Segment tip = skeleton.segments.front();
-    tip.start = {0.0f, 1.0f, 0.0f};
-    tip.end = {0.0f, 2.0f, 0.0f};
-    tip.depth = 3;
-    skeleton.segments.push_back(tip);
+    turtle::Skeleton skeleton = oneSegment({0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 0.20f, 0.20f);
+    turtle::Segment twig = skeleton.segments.front();
+    twig.start = {0.0f, 1.0f, 0.0f};
+    twig.end = {0.0f, 2.0f, 0.0f};
+    twig.startRadius = 0.02f;
+    twig.endRadius = 0.02f;
+    skeleton.segments.push_back(twig);
     skeleton.boundsMax.y = 2.05f;
 
     const voxelize::VoxelGrid grid = voxelize::voxelize(skeleton, config);
@@ -485,8 +491,8 @@ TEST_CASE("branch depth selects a colour from the ramp", "[voxelize]") {
     std::sort(seen.begin(), seen.end());
 
     REQUIRE(seen.size() == 2);
-    CHECK(seen.front() == 10);  // depth 0 -> first slot
-    CHECK(seen.back() == 13);   // depth 3 of 3 -> last slot
+    CHECK(seen.front() == 10);  // thickest -> first slot, bark
+    CHECK(seen.back() == 13);   // thinnest -> last slot, foliage green
 }
 
 TEST_CASE("an empty skeleton voxelizes to an empty grid", "[voxelize]") {

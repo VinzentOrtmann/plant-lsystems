@@ -173,7 +173,8 @@ Stage stageFor(const viewer::PlantParams& before, const viewer::PlantParams& aft
          before.crownHeight != after.crownHeight || before.crownRise != after.crownRise ||
          before.influenceRadius != after.influenceRadius ||
          before.killDistance != after.killDistance || before.stepLength != after.stepLength ||
-         before.radiusExponent != after.radiusExponent)) {
+         before.taperExponent != after.taperExponent ||
+         before.trunkRadius != after.trunkRadius)) {
         return Stage::Expand;
     }
     if (before.angleScale != after.angleScale || before.thicknessScale != after.thicknessScale ||
@@ -268,7 +269,8 @@ public:
         config.influenceRadius = params.influenceRadius;
         config.killDistance = params.killDistance;
         config.stepLength = params.stepLength;
-        config.radiusExponent = params.radiusExponent;
+        config.taperExponent = params.taperExponent;
+        config.trunkRadius = params.trunkRadius;
 
         const auto start = std::chrono::steady_clock::now();
         skeletons_.clear();
@@ -667,6 +669,22 @@ int main(int argc, char** argv) {
         }
 
         viewer::PlantParams params;
+        // PlantParams has to mirror the colonizer's knobs so the UI can bind
+        // sliders to them, but the defaults live in exactly one place: copy them
+        // across rather than writing the numbers down twice and watching them
+        // drift apart.
+        {
+            const colonize::ColonizeConfig defaults;
+            params.attractors = defaults.attractorCount;
+            params.crownWidth = defaults.crownRadii.x;
+            params.crownHeight = defaults.crownRadii.y;
+            params.crownRise = defaults.crownCentre.y;
+            params.influenceRadius = defaults.influenceRadius;
+            params.killDistance = defaults.killDistance;
+            params.stepLength = defaults.stepLength;
+            params.trunkRadius = defaults.trunkRadius;
+            params.taperExponent = defaults.taperExponent;
+        }
         params.presetIndex = static_cast<int>(std::distance(names.begin(), found));
         params.iterations = options.iterations;
         params.seed = static_cast<int>(options.seed);
